@@ -1,32 +1,68 @@
-#include <fstream>
-#include <iostream>
+//#include "boost/program_options.hpp"
+//#include "boost/any.hpp"
+//#include <iostream>
+//#include <fstream>
 
-template <typename land>
-void push_land(const land& L, int t, const std::string& run_id, std::function<bool (int)> in_range) {
-  if(in_range(t)) {
-	// Resource
-	std::ofstream map;
-	map.open ("res/" + run_id + "m", std::ios::app);
-	for(auto C = L.begin(); C != L.end() - 1; ++C) map << C->resource;
-	map << L.back().resource << std::endl;
-	map.close();
-	// True Bank
-	std::ofstream Tbank;
-	Tbank.open("res/" + run_id + "tb", std::ios::app);
-	for(auto C = L.begin(); C != L.end() - 1; ++C) Tbank << C->bank[1] << ",";
-	Tbank << L.back().bank[1] << std::endl;
-	Tbank.close();
-  }
+template <typename pseudomap>
+void push_params(const pseudomap& vm) {
+	std::ofstream file ("params", std::ios::app);
+	for(auto& V : vm) {
+		if(typeid(int) == V.second.value().type()) file << V.first << "="  << boost::any_cast<int>(V.second.value()) << ";" << std::endl;
+		else if(typeid(double) == V.second.value().type()) {
+			file << V.first << "="  << boost::any_cast<double>(V.second.value()) << ";" << std::endl;}
+		else if(typeid(std::string) == V.second.value().type()) {
+			file << V.first << "="  << boost::any_cast<std::string>(V.second.value()) << ";" << std::endl;}
+	}
+	file.close();
 }
 
-template <typename pop>
-void push_pop(const pop& P, int t, const std::string& run_id, std::function<bool (int)> in_range) {
-  if(in_range(t)) {
-	// Agent Locations
-	std::ofstream aloc;
-	aloc.open("res/" + run_id + "a", std::ios::app);
-	for(auto A = P.begin(); A != P.end() - 1; ++A) aloc << A->loc << ",";
-	aloc << P.back().loc << std::endl;
-	aloc.close();
-  }
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
+    copy(v.begin(), v.end(), std::ostream_iterator<T>(os," "));
+    return os;
 }
+
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::deque<T>& d) {
+    copy(d.begin(), d.end(), std::ostream_iterator<T>(os," "));
+    return os;
+}
+
+void push_state(landscape& L, population& P) {
+	std::ofstream landfile("land.state");
+	for(auto& C : L) {
+		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent << endl;
+		for(auto& S : C.bank) {
+			landfile << C.snake <<" "<< S.id <<" "<< S.species <<" "<< S.parent <<" "<< endl;
+		}
+	}
+	landfile.close();
+	std::ofstream popfile("pop.state");
+	for(auto& A : P) {
+		popfile << A.snake <<" "<< A.trees << A.longM << endl;
+	}
+	popfile.close();
+}
+
+/** DISPLAY FORMAT FOR TESTING
+void displayAgent(agent& A) {
+	cout<< "snake: " << A.snake << endl;
+	cout<< "gut: ";
+	for(auto& p : A.cache) cout << p.first<<"|"<< p.second.species <<"|"<< p.second.parent<<", ";
+	cout << endl;
+	cout<< "trees:   " << A.trees << endl;
+	cout<< "rewards: " << A.rewards << endl;
+	cout<< "shortM: " << A.shortM << endl;
+	cout<< "longM:  " << A.longM << endl;
+}
+	
+void displayCell(cell& C) {
+	cout << "snake: " << C.snake << endl;
+	cout << "  bank: ";
+	for(auto& P : C.bank) cout << P.species<<"|"<<P.parent;
+	cout<< endl << "tree: " << C.tree.id << endl;
+	cout << "  species: " << C.tree.species << endl;
+	cout << "  fruit: " << C.tree.fruit << endl;
+	cout << "  parent: " << C.tree.parent << endl;
+	cout << "__________________________" << endl;
+}**/
