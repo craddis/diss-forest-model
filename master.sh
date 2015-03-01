@@ -2,11 +2,11 @@ cd projects/SEED
 
 # Compile
 g++-4.8 -std=c++11 func/nvn.cpp -o NvN2.0 -l boost_program_options
-g++-4.8 -std=c++11 func/model.cpp -o AvR2.0 -l boost_program_options
+g++-4.8 -std=c++11 func/model.cpp -o AvR2.1 -l boost_program_options
 
 # Run full AvR model
-cd res; runid=1; mkdir $runid; cd $runid
-batch-job ../../AvR2.0 --A 40 --lag 10 --steps 100 --years 100 --tol 0.12 --a 0.5 --aspan 10 --jspan 3 --E 100 --f 1.0
+cd res; runid=2; mkdir $runid; cd $runid
+batch-job ../../AvR2.1 --A 40 --lag 10 --steps 100 --years 100 --tol 0.12 --a 0.5 --aspan 10 --jspan 3 --E 100 --f 1.0 --Q 80 --R 80
 
 
 

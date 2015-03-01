@@ -29,21 +29,22 @@ int main(int argc, char* argv[]) {
 namespace po = boost::program_options;
 po::options_description desc("Allowed Options");
 desc.add_options()
-	("version", po::value<std::string>()->default_value("2.0"), "nrow in grid")
-    ("R", po::value<int>()->default_value(100), "nrow in grid")
-    ("Q", po::value<int>()->default_value(100), "ncol in grid")
-    ("A", po::value<int>()->default_value(10), "number of foragers")
-    ("lag", po::value<int>()->default_value(5), "gut retention time")
-    ("jspan", po::value<double>()->default_value(10), "lifspan of advanced regeneration")
-    ("aspan", po::value<double>()->default_value(100), "lifespan of adult trees")
-    ("steps", po::value<int>()->default_value(100), "steps in a day")
-    ("years", po::value<int>()->default_value(1000), "years in simulation")
-	("init", po::value<std::string>()->default_value("random"), "starting point for landscape and agents")
-	("p", po::value<double>()->default_value(0.2), "initial proportion of focal trees")
-	("tol", po::value<double>()->default_value(0.12), "")
-	("a", po::value<double>()->default_value(0.5), "")
-	("E", po::value<double>()->default_value(20), "")
-	("f", po::value<double>()->default_value(1.0), "proportion of trees that fruit each day")
+	("version", po::value<std::string>()->default_value("2.1"), "Model Version")
+    ("R", po::value<int>()->default_value(100), "Nrow in grid")
+    ("Q", po::value<int>()->default_value(100), "Ncol in grid")
+    ("A", po::value<int>()->default_value(10), "Number of foragers")
+    ("lag", po::value<int>()->default_value(5), "Gut retention time")
+    ("jspan", po::value<double>()->default_value(10), "Lifspan of advanced regeneration")
+    ("aspan", po::value<double>()->default_value(100), "Lifespan of adult trees")
+    ("steps", po::value<int>()->default_value(100), "Steps in a day")
+    ("years", po::value<int>()->default_value(1000), "Years in simulation")
+	("init", po::value<std::string>()->default_value("random"), "Starting point for landscape and agents")
+	("p", po::value<double>()->default_value(0.2), "Initial proportion of focal trees")
+	("tol", po::value<double>()->default_value(0.12), "Patch Quality Tolerance")
+	("a", po::value<double>()->default_value(0.5), "Memory Retention")
+	("E", po::value<double>()->default_value(20), "Resource Conversion Efficiency")
+	("f", po::value<double>()->default_value(1.0), "Proportion of trees that fruit each day")
+	("U", po::value<double>()->default_value(1), "Proportion of undispersed seeds that become established")
 ;
 
 po::variables_map params;
@@ -64,7 +65,8 @@ parameters par(
 	params["tol"].as<double>(),
 	params["a"].as<double>(),
 	params["E"].as<double>(),
-	params["f"].as<double>()
+	params["f"].as<double>(),
+	params["U"].as<double>()
 );
 
 //MODEL INITIALIZATION
@@ -84,13 +86,14 @@ std::ofstream amfile("annual");
 
 //SIMULATION
 for(int day = 0; day != par.days; ++day) {
+	for(auto& A: foragers) memflush(A); // Erase short term memory from day before
 	shuffle(foragers.begin(), foragers.end(), urng());
 	for(int step = 0; step != par.steps; ++step) {
 		// TIME STEP
 		for(auto& A : foragers) BiModalStep(A, forest, hex, par, state, day);
 	}
 	//END OF THE DAY
-	for(auto& A: foragers) {seedflush(A, forest); memflush(A);}
+	for(auto& A: foragers) seedflush(A, forest); // Void all seeds at sleeping site 
 	state.update();
 	// DAILY METRICS
 	/**/
@@ -103,7 +106,7 @@ for(int day = 0; day != par.days; ++day) {
 // ENDPOINT METRICS
 /**/
 // STATE DUMP
-push_state(forest, foragers);
+push_state(forest, foragers, par);
 
 // Close files
 //dmfile.close();

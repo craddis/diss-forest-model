@@ -11,7 +11,7 @@ void push_params(const pseudomap& vm) {
 		else if(typeid(double) == V.second.value().type()) {
 			file << V.first << "="  << boost::any_cast<double>(V.second.value()) << ";" << std::endl;}
 		else if(typeid(std::string) == V.second.value().type()) {
-			file << V.first << "="  << boost::any_cast<std::string>(V.second.value()) << ";" << std::endl;}
+			file << V.first << "='"<< boost::any_cast<std::string>(V.second.value()) << "';" << std::endl;}
 	}
 	file.close();
 }
@@ -28,18 +28,26 @@ std::ostream& operator<<(std::ostream& os, const std::deque<T>& d) {
     return os;
 }
 
-void push_state(landscape& L, population& P) {
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& v) {
+    copy(v.begin(), v.end(), std::ostream_iterator<T>(os," "));
+    return os;
+}
+
+void push_state(landscape& L, population& P, parameters& PAR) {
+	auto older = [&](plant& p){return p.est < (PAR.days - PAR.jdays);};
 	std::ofstream landfile("land.state");
 	for(auto& C : L) {
-		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent << endl;
-		for(auto& S : C.bank) {
-			landfile << C.snake <<" "<< S.id <<" "<< S.species <<" "<< S.parent <<" "<< endl;
+		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent <<" "<< C.tree.est << endl;
+		auto rit = find_if(C.bank.rbegin(), C.bank.rend(), older);
+		for(auto P = C.bank.rbegin(); P!=rit; ++P) {
+			landfile << C.snake <<" "<< P->id <<" "<< P->species <<" "<< P->parent <<" "<< P->est << endl;
 		}
 	}
 	landfile.close();
 	std::ofstream popfile("pop.state");
 	for(auto& A : P) {
-		popfile << A.snake <<" "<< A.trees << A.longM << endl;
+		popfile << A.snake <<" "<< A.trees <<" "<< A.longM << A.shortM << endl;
 	}
 	popfile.close();
 }

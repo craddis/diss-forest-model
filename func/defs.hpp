@@ -13,8 +13,8 @@ struct state_var {
 
 struct parameters {
 	int A, lag, steps, days;
-	double jdays, amort, tol, a, E, f;
-	parameters(int A, int lag, double jspan, double aspan, int steps, int years, double tol, double a, double E, double f) :
+	double jdays, amort, tol, a, E, f, U;
+	parameters(int A, int lag, double jspan, double aspan, int steps, int years, double tol, double a, double E, double f, double U) :
 		A(A), 
 		lag(lag), 
 		steps(steps), 
@@ -24,7 +24,8 @@ struct parameters {
 		tol(tol),
 		a(a),
 		E(E),
-		f(f) {} 
+		f(f),
+		U(U) {} 
 };
 
 struct plant { // Includes seeds, seedlings and trees
@@ -45,7 +46,6 @@ struct cell {
 	int snake = -1; // Position of the cell in the landscape vector
 	plant tree; // Each cell has one and only one tree
 	vector<plant> bank; // Seed or seedling bank
-	
 };
 
 typedef vector<cell> landscape;
@@ -141,7 +141,7 @@ void memflush(agent& A) {
 void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 	int dest = -1;
 	for(auto& C : L) {
-		if(C.tree.fruit) { // Does it still have fruit...
+		if(C.tree.fruit && maybe(PAR.U)) { // Does it still have fruit...and is the seed intact?
 			assert(SV.Nf > 0);
 			if(C.tree.species==false && maybe(SV.Ed)) dest = H.rwalk(C.snake, PAR.lag);
 			else if(maybe(0.8)) dest = *one_of( H.adjlist.find(C.snake)->second ); // Choose cell for seed to disperse to
