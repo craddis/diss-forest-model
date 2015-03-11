@@ -29,28 +29,32 @@ int main(int argc, char* argv[]) {
 namespace po = boost::program_options;
 po::options_description desc("Allowed Options");
 desc.add_options()
-	("version", po::value<std::string>()->default_value("2.1"), "Model Version")
-    ("R", po::value<int>()->default_value(100), "Nrow in grid")
-    ("Q", po::value<int>()->default_value(100), "Ncol in grid")
-    ("A", po::value<int>()->default_value(10), "Number of foragers")
+	("version", po::value<std::string>()->default_value("2.2"), "Model Version")
+	("rid", po::value<std::string>()->default_value(""), "Simulation Run ID number")
+    ("R", po::value<int>()->default_value(50), "Nrow in grid")
+    ("Q", po::value<int>()->default_value(50), "Ncol in grid")
+    ("A", po::value<int>()->default_value(20), "Number of foragers")
     ("lag", po::value<int>()->default_value(5), "Gut retention time")
-    ("jspan", po::value<double>()->default_value(10), "Lifspan of advanced regeneration")
-    ("aspan", po::value<double>()->default_value(100), "Lifespan of adult trees")
+    ("jspan", po::value<double>()->default_value(2), "Lifspan of advanced regeneration")
+    ("aspan", po::value<double>()->default_value(10), "Lifespan of adult trees")
     ("steps", po::value<int>()->default_value(100), "Steps in a day")
-    ("years", po::value<int>()->default_value(1000), "Years in simulation")
+    ("years", po::value<int>()->default_value(500), "Years in simulation")
 	("init", po::value<std::string>()->default_value("random"), "Starting point for landscape and agents")
-	("p", po::value<double>()->default_value(0.2), "Initial proportion of focal trees")
-	("tol", po::value<double>()->default_value(0.12), "Patch Quality Tolerance")
+	("p", po::value<double>()->default_value(0.20), "Initial proportion of focal trees")
+	("theta", po::value<int>()->default_value(5), "Minumum patch size")
 	("a", po::value<double>()->default_value(0.5), "Memory Retention")
-	("E", po::value<double>()->default_value(20), "Resource Conversion Efficiency")
-	("f", po::value<double>()->default_value(1.0), "Proportion of trees that fruit each day")
+	("E", po::value<double>()->default_value(50), "Resource Conversion Efficiency")
+	("f", po::value<double>()->default_value(1), "Proportion of trees that fruit each day")
 	("U", po::value<double>()->default_value(1), "Proportion of undispersed seeds that become established")
+	("gr", po::value<double>()->default_value(0.2), "Proportion of remainings seeds that are ground dispersed to immediate neighbor")
 ;
 
 po::variables_map params;
 po::store(po::parse_command_line(argc, argv, desc), params);
 po::notify(params);
-push_params(params);
+
+std::string rid = params["rid"].as<std::string>();
+push_params(params, rid);
 
 std::string init = params["init"].as<std::string>();
 double p = params["p"].as<double>();
@@ -62,11 +66,12 @@ parameters par(
 	params["aspan"].as<double>(),
 	params["steps"].as<int>(),
 	params["years"].as<int>(),
-	params["tol"].as<double>(),
+	params["theta"].as<int>(),
 	params["a"].as<double>(),
 	params["E"].as<double>(),
 	params["f"].as<double>(),
-	params["U"].as<double>()
+	params["U"].as<double>(),
+	params["gr"].as<double>()
 );
 
 //MODEL INITIALIZATION
@@ -82,11 +87,12 @@ InitLandRand(hex, forest, p, state); // Place trees randomly
 InitPopRand(hex, foragers); // Place agents randomly
 
 //std::ofstream dmfile("daily");
-std::ofstream amfile("annual");
+std::ofstream amfile("annual."+rid);
 
 //SIMULATION
 for(int day = 0; day != par.days; ++day) {
 	for(auto& A: foragers) memflush(A); // Erase short term memory from day before
+	state.switches=0; state.local=0; // Reset yesterday's search state counters 
 	shuffle(foragers.begin(), foragers.end(), urng());
 	for(int step = 0; step != par.steps; ++step) {
 		// TIME STEP
@@ -95,18 +101,26 @@ for(int day = 0; day != par.days; ++day) {
 	//END OF THE DAY
 	for(auto& A: foragers) seedflush(A, forest); // Void all seeds at sleeping site 
 	state.update();
+	if(state.Nf==0) {
+		push_state(forest, foragers, par, rid);
+		amfile.close();
+		return 0;
+	}
 	// DAILY METRICS
 	/**/
 	phen(forest, hex, par, state, day);
 	grow(forest, ngaps, par, state, day);
 	// YEARLY METRICS 
-	if(day % 365 == 0) amfile<< day <<" "<< state.Ed <<" "<< abundance(hex, state) <<endl;
+	if(day % 365 == 0) {
+		amfile<< day <<" "<< state.Ed <<" "<< abundance(hex, state) <<" ";
+		amfile<< state.switches <<" "<< state.local << endl;
+	}
 }
 
 // ENDPOINT METRICS
 /**/
 // STATE DUMP
-push_state(forest, foragers, par);
+push_state(forest, foragers, par, rid);
 
 // Close files
 //dmfile.close();

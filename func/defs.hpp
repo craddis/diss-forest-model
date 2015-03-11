@@ -2,30 +2,31 @@
 //using namespace keittlab;
 
 struct state_var {
-	int tree_id, Nfd, Nf;
+	int tree_id, Nfd, Nf, switches, local;
 	double Ed;
 	void update() {
 		Ed = 1.0*Nfd / Nf;
 	}
 	state_var() :
-		tree_id(0), Nfd(0), Nf(0), Ed(0) {}
+		tree_id(0), Nfd(0), Nf(0), switches(0), local(0), Ed(0) {}
 };
 
 struct parameters {
 	int A, lag, steps, days;
-	double jdays, amort, tol, a, E, f, U;
-	parameters(int A, int lag, double jspan, double aspan, int steps, int years, double tol, double a, double E, double f, double U) :
+	double jdays, amort, tol, a, E, f, U, gr;
+	parameters(int A, int lag, double jspan, double aspan, int steps, int years, int theta, double a, double E, double f, double U, double gr) :
 		A(A), 
 		lag(lag), 
 		steps(steps), 
 		jdays(jspan*365),
 		amort(1 / aspan / 365),
 		days(years*365),
-		tol(tol),
 		a(a),
+		tol(pow(a, theta+1)),
 		E(E),
 		f(f),
-		U(U) {} 
+		U(U),
+		gr(gr) {} 
 };
 
 struct plant { // Includes seeds, seedlings and trees
@@ -113,17 +114,28 @@ void BiModalStep(agent& A, landscape& L, lattice& H, parameters& PAR, state_var&
 		A.cache.pop_front(); // Remove seed from gut
 	}
 	//MOVE
-	auto neighbors = H.getAdj(A.snake, false, false);
+	vector<int>& neighbors = H.adjlist.find(A.snake)->second;
 	vector<int> edibles;
 	copy_if(neighbors.begin(), neighbors.end(), back_inserter(edibles), edible);
-	if(!edibles.empty()) {A.local = true; A.snake = *one_of(edibles);} // If there is an edible neighbor, always go there
-	else if(A.rewards >= PAR.tol || A.snake == A.dest) {A.local = true; A.snake = *one_of(neighbors);} // If not, but the patch has been good, pick a random neighbor
+	bool old_local = A.local;
+	if(!edibles.empty()) { // If there is an edible neighbor, always go there
+		++SV.local; SV.switches += (true - A.local); // Track movement states
+		A.local = true; 
+		A.snake = *one_of(edibles);
+	} 
+	else if(A.rewards >= PAR.tol || A.snake == A.dest) { // If not, but the patch has been good, pick a random neighbor
+		++SV.local; SV.switches += (true - A.local); // Track movement states
+		A.local = true; 
+		A.snake = *one_of(neighbors);
+	}
 	else {
-		if(A.local) A.dest = best(A, H, PAR.E);
+		if(A.local) {
+			A.dest = best(A, H, PAR.E);
+			++SV.switches; // Track movement states
+		}
 		A.local = false;
 		A.snake = H.direction(A.snake, A.dest); // Otherwise take a step towards the best global location
 	}
-
 }
 
 void seedflush(agent& A, landscape& L) {
@@ -141,12 +153,16 @@ void memflush(agent& A) {
 void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 	int dest = -1;
 	for(auto& C : L) {
-		if(C.tree.fruit && maybe(PAR.U)) { // Does it still have fruit...and is the seed intact?
-			assert(SV.Nf > 0);
-			if(C.tree.species==false && maybe(SV.Ed)) dest = H.rwalk(C.snake, PAR.lag);
-			else if(maybe(0.8)) dest = *one_of( H.adjlist.find(C.snake)->second ); // Choose cell for seed to disperse to
-			else dest = C.snake;
-			L[dest].bank.emplace_back(plant(C.tree.species, C.tree.id, day)); // Put seed in bank
+		if(C.tree.fruit) { // Does it still have fruit?
+			if(C.tree.species==false && maybe(SV.Ed)) {
+				dest = H.rwalk(C.snake, PAR.lag);
+				L[dest].bank.emplace_back(plant(C.tree.species, C.tree.id, day));
+			}
+			else {
+				if(maybe(PAR.gr)) dest = *one_of( H.adjlist.find(C.snake)->second ); // Choose cell for seed to disperse to
+				else dest = C.snake;
+				if(maybe(PAR.U)) L[dest].bank.emplace_back(plant(C.tree.species, C.tree.id, day));
+			}
 		}
 		C.tree.fruit = maybe(PAR.f); // with probability f, give tree fruit
 	}

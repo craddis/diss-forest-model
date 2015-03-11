@@ -4,8 +4,8 @@
 //#include <fstream>
 
 template <typename pseudomap>
-void push_params(const pseudomap& vm) {
-	std::ofstream file ("params", std::ios::app);
+void push_params(const pseudomap& vm, std::string rid) {
+	std::ofstream file ("params."+rid, std::ios::app);
 	for(auto& V : vm) {
 		if(typeid(int) == V.second.value().type()) file << V.first << "="  << boost::any_cast<int>(V.second.value()) << ";" << std::endl;
 		else if(typeid(double) == V.second.value().type()) {
@@ -34,9 +34,9 @@ std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& v) {
     return os;
 }
 
-void push_state(landscape& L, population& P, parameters& PAR) {
+void push_state(landscape& L, population& P, parameters& PAR, std::string rid) {
 	auto older = [&](plant& p){return p.est < (PAR.days - PAR.jdays);};
-	std::ofstream landfile("land.state");
+	std::ofstream landfile("land.state."+rid);
 	for(auto& C : L) {
 		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent <<" "<< C.tree.est << endl;
 		auto rit = find_if(C.bank.rbegin(), C.bank.rend(), older);
@@ -45,7 +45,7 @@ void push_state(landscape& L, population& P, parameters& PAR) {
 		}
 	}
 	landfile.close();
-	std::ofstream popfile("pop.state");
+	std::ofstream popfile("pop.state."+rid);
 	for(auto& A : P) {
 		popfile << A.snake <<" "<< A.trees <<" "<< A.longM << A.shortM << endl;
 	}

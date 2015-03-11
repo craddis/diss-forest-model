@@ -2,22 +2,43 @@ cd projects/SEED
 
 # Compile
 g++-4.8 -std=c++11 func/nvn.cpp -o NvN2.0 -l boost_program_options
-g++-4.8 -std=c++11 func/model.cpp -o AvR2.1 -l boost_program_options
+g++-4.8 -DNDEBUG -std=c++11 func/model.cpp -o AvR2.2 -l boost_program_options
 
 # Run full AvR model
-cd res; runid=2; mkdir $runid; cd $runid
-batch-job ../../AvR2.1 --A 40 --lag 10 --steps 100 --years 100 --tol 0.12 --a 0.5 --aspan 10 --jspan 3 --E 100 --f 1.0 --Q 80 --R 80
+cd res; runid=3; mkdir $runid; cd $runid
+batch-job ../../AvR2.2
+
+# Generate code for TACC
+rid=0
+for aspan in 2 10 100; do
+for jspan in 0.5 2 5; do
+for a in 0.2 0.5 0.8; do
+for theta in 2 5 10; do
+for lag in 2 5 10; do
+for E in 10 50 100; do
+for U in 0 0.5 1; do
+for gr in 0 0.2 0.857; do
+echo AvR2.2 --aspan $aspan --jspan $jspan --a $a --theta $theta --lag $lag --E $E --U $U --gr $gr --rid $rid >> seed_commands.sh;
+rid=$(($rid+1));
+done
+done
+done
+done
+done
+done
+done
+done
 
 
-
+# On TACC
+module load launcher
+sbatch launcher.slurm
 
 
 
 
 # Extras
-cd res; runid=2
-for lag in 10; do
-for aspan in 100; do
+
  mkdir $runid
  cd $runid
  mkdir init
