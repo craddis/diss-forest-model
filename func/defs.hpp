@@ -46,7 +46,7 @@ struct plant { // Includes seeds, seedlings and trees
 struct cell {
 	int snake = -1; // Position of the cell in the landscape vector
 	plant tree; // Each cell has one and only one tree
-	vector<plant> bank; // Seed or seedling bank
+	deque<plant> bank; // Seed or seedling bank
 };
 
 typedef vector<cell> landscape;
@@ -150,6 +150,14 @@ void memflush(agent& A) {
 	A.shortM.clear();
 }
 
+void prune(landscape& L, parameters& PAR, state_var& SV, int day) {
+	auto alive = [&](plant& p){return p.est > (day - PAR.jdays);}; // True when seedling is alive
+	for(auto& C : L) {
+		auto firstLiving = find_if(C.bank.begin(), C.bank.end(), alive);
+		C.bank.erase(C.bank.begin(), firstLiving); // Erase all seedlings up to, but not including, the first living one
+	}
+}
+
 void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 	int dest = -1;
 	for(auto& C : L) {
@@ -170,7 +178,7 @@ void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 }
 
 void grow(landscape& L, binomial_distribution<>& ngaps, parameters& PAR, state_var& SV, int day) {
-	auto older = [&](plant& p){return p.est < (day - PAR.jdays);};
+	auto dead = [&](plant& p){return p.est < (day - PAR.jdays);};
 	int NGAPS = ngaps(urng()); 
 	for(int i=0; i < NGAPS; ++i) { // How many gaps are created today?
 		auto& C = *one_of(L); // Refer to a random cell
@@ -180,7 +188,7 @@ void grow(landscape& L, binomial_distribution<>& ngaps, parameters& PAR, state_v
 			C.tree.fruit = maybe(PAR.f); // Give new tree fruit, with probability f
 		}
 		else {
-			auto rit = find_if(C.bank.rbegin(), C.bank.rend(), older); // Find first dead seedling by searching from back to front
+			auto rit = find_if(C.bank.rbegin(), C.bank.rend(), dead); // Find first dead seedling by searching from back to front
 			auto winner = one_of_range(C.bank.rbegin(), rit); // Point to winner		
 			SV.Nf += (winner->species - C.tree.species); // Update focal tree count
 			C.tree = *winner; // Replace old tree with new one

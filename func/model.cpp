@@ -115,6 +115,8 @@ for(int day = 0; day != par.days; ++day) {
 		amfile<< day <<" "<< state.Ed <<" "<< abundance(hex, state) <<" ";
 		amfile<< state.switches <<" "<< state.local << endl;
 	}
+	// Prune seedling bank
+	if(day % (365*100) == 1) prune(forest, par, state, day);
 }
 
 // ENDPOINT METRICS
