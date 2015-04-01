@@ -2,14 +2,15 @@ cd projects/SEED
 
 # Compile
 g++-4.8 -std=c++11 func/nvn.cpp -o NvN2.0 -l boost_program_options
-g++-4.8 -DNDEBUG -std=c++11 func/model.cpp -o AvR2.2 -l boost_program_options
+g++-4.8 -DNDEBUG -std=c++11 func/model.cpp -o SEED-2.3 -l boost_program_options
+gcc-4.7 -DNDEBUG -std=c++11 func/model.cpp -o SEED-2.3 -l boost_program_options
 
 # Run full AvR model
 cd res; runid=3; mkdir $runid; cd $runid
 batch-job ../../AvR2.2
 
 # Generate code for TACC
-rid=0
+rid=1000
 for aspan in 2 10 100; do
 for jspan in 0.5 2 5; do
 for a in 0.2 0.5 0.8; do
@@ -18,7 +19,7 @@ for lag in 2 5 10; do
 for E in 10 50 100; do
 for U in 0 0.5 1; do
 for gr in 0 0.2 0.857; do
-echo AvR2.2 --aspan $aspan --jspan $jspan --a $a --theta $theta --lag $lag --E $E --U $U --gr $gr --rid $rid >> seed_commands.sh;
+echo ./SEED-2.3 --aspan $aspan --jspan $jspan --a $a --theta $theta --lag $lag --E $E --U $U --gr $gr --rid $rid
 rid=$(($rid+1));
 done
 done
@@ -27,13 +28,38 @@ done
 done
 done
 done
-done
+done | split -d -a1 -l2048 - sweep
+
+head -n-1 sweep3 > sweep4
+cat sweep4 > sweep3
+rm sweep4
+
+scp sweep* addi416@stampede.tacc.utexas.edu:~
+
+# One extra run on antarctica to even out nodes
+cd res
+../SEED-2.3 --aspan 100 --jspan 5 --a 0.8 --theta 10 --lag 10 --E 100 --U 1 --gr 0.857 --rid 7560
+
+# Syntax for batch-job time SEED...
+batch-job '{ time ../SEED-2.3 --aspan 100 --jspan 0.5 --theta 10 --rid A;} 2> time.A'
 
 
 # On TACC
-module load launcher
-sbatch launcher.slurm
+cdh
+module load git
+git pull ...
+mv sweep* $WORK/
+module load gcc
+module load boost
+gcc -DNDEBUG -std=c++11 seed/func/model.cpp -I$TACC_BOOST_INC -L$TACC_BOOST_LIB -lboost_program_options -o $WORK/SEED-2.3
 
+cdw
+module load launcher
+sbatch launcher0.slurm
+sbatch launcher1.slurm
+sbatch launcher2.slurm
+sbatch launcher3.slurm
+squeue -u addi416
 
 
 

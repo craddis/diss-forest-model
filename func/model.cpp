@@ -11,7 +11,6 @@
 #include <boost/any.hpp>
 #include <cmath>
 #include "random.hpp"
-#include <armadillo>
 #include <unordered_set>
 #include <unordered_map>
 #include <cassert>
@@ -29,7 +28,7 @@ int main(int argc, char* argv[]) {
 namespace po = boost::program_options;
 po::options_description desc("Allowed Options");
 desc.add_options()
-	("version", po::value<std::string>()->default_value("2.2"), "Model Version")
+	("version", po::value<std::string>()->default_value("2.3.x"), "Model Version")
 	("rid", po::value<std::string>()->default_value(""), "Simulation Run ID number")
     ("R", po::value<int>()->default_value(50), "Nrow in grid")
     ("Q", po::value<int>()->default_value(50), "Ncol in grid")
@@ -88,6 +87,9 @@ InitPopRand(hex, foragers); // Place agents randomly
 
 //std::ofstream dmfile("daily");
 std::ofstream amfile("annual."+rid);
+std::ofstream canopyfile("canopy."+rid);
+
+int checkNf = 0;
 
 //SIMULATION
 for(int day = 0; day != par.days; ++day) {
@@ -101,20 +103,38 @@ for(int day = 0; day != par.days; ++day) {
 	//END OF THE DAY
 	for(auto& A: foragers) seedflush(A, forest); // Void all seeds at sleeping site 
 	state.update();
-	if(state.Nf==0) {
-		push_state(forest, foragers, par, rid);
-		amfile.close();
-		return 0;
-	}
 	// DAILY METRICS
 	/**/
 	phen(forest, hex, par, state, day);
-	grow(forest, ngaps, par, state, day);
+	grow(forest, ngaps, par, state, day);	
+
+	if(state.Nf == 0) {
+		checkNf = 0;
+		for(auto& C : forest) checkNf += C.tree.species;
+		if(checkNf != state.Nf) {
+			cout << rid << " : Abundance correction : state.Nf=" << state.Nf << ", checkNf=" << checkNf << " on day " << day << endl;
+			state.Nf = checkNf;
+		}
+		else {
+			cout << rid << " : Exit due to zero abudance, day " << day << endl;
+			amfile<< day <<" "<< state.Ed <<" "<< state.Nf <<" ";
+			amfile<< state.switches <<" "<< state.local << endl;
+			push_state(forest, foragers, par, rid);
+			amfile.close();
+			canopyfile.close();
+			return 0;
+		}
+	}
 	// YEARLY METRICS 
 	if(day % 365 == 0) {
-		amfile<< day <<" "<< state.Ed <<" "<< abundance(hex, state) <<" ";
+		amfile<< day <<" "<< state.Ed <<" "<< state.Nf <<" ";
 		amfile<< state.switches <<" "<< state.local << endl;
+		for(auto& C : forest) {
+			canopyfile << C.tree.species;
+		}
+		canopyfile << endl;
 	}
+	
 	// Prune seedling bank
 	if(day % (365*100) == 1) prune(forest, par, state, day);
 }
@@ -127,6 +147,7 @@ push_state(forest, foragers, par, rid);
 // Close files
 //dmfile.close();
 amfile.close();
+canopyfile.close();
 
 return 0;
 };

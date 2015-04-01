@@ -179,16 +179,18 @@ void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 
 void grow(landscape& L, binomial_distribution<>& ngaps, parameters& PAR, state_var& SV, int day) {
 	auto dead = [&](plant& p){return p.est < (day - PAR.jdays);};
-	int NGAPS = ngaps(urng()); 
+	int NGAPS = ngaps(urng());
+	assert( NGAPS >= 0 );
 	for(int i=0; i < NGAPS; ++i) { // How many gaps are created today?
 		auto& C = *one_of(L); // Refer to a random cell
-		if(C.bank.empty()) { // If seedling bank is empty, always grow a matrix tree
-			SV.Nf += (false - C.tree.species); // Update focal tree count
+		auto rit = find_if(C.bank.rbegin(), C.bank.rend(), dead); // Find first dead seedling by searching from back to front
+		if(rit == C.bank.rbegin()) { // If seedling bank is empty (or has no live seeds), always grow a matrix tree
+			SV.Nf -= C.tree.species; // Update focal tree count
 			C.tree = plant(SV.tree_id); // Replace old tree with new matrix tree
 			C.tree.fruit = maybe(PAR.f); // Give new tree fruit, with probability f
+			assert( C.tree.species == false );
 		}
 		else {
-			auto rit = find_if(C.bank.rbegin(), C.bank.rend(), dead); // Find first dead seedling by searching from back to front
 			auto winner = one_of_range(C.bank.rbegin(), rit); // Point to winner		
 			SV.Nf += (winner->species - C.tree.species); // Update focal tree count
 			C.tree = *winner; // Replace old tree with new one
