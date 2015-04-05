@@ -14,7 +14,8 @@ struct state_var {
 struct parameters {
 	int A, lag, steps, days;
 	double jdays, amort, tol, a, E, f, U, gr;
-	parameters(int A, int lag, double jspan, double aspan, int steps, int years, int theta, double a, double E, double f, double U, double gr) :
+	string resdir, rid;
+	parameters(int A, int lag, double jspan, double aspan, int steps, int years, int theta, double a, double E, double f, double U, double gr, string resdir, string rid) :
 		A(A), 
 		lag(lag), 
 		steps(steps), 
@@ -22,11 +23,13 @@ struct parameters {
 		amort(1 / aspan / 365),
 		days(years*365),
 		a(a),
-		tol(pow(a, theta+1)),
+		tol((1-a)*pow(a, theta)),
 		E(E),
 		f(f),
 		U(U),
-		gr(gr) {} 
+		gr(gr),
+		resdir(resdir),
+		rid(rid) {} 
 };
 
 struct plant { // Includes seeds, seedlings and trees
@@ -117,21 +120,25 @@ void BiModalStep(agent& A, landscape& L, lattice& H, parameters& PAR, state_var&
 	vector<int>& neighbors = H.adjlist.find(A.snake)->second;
 	vector<int> edibles;
 	copy_if(neighbors.begin(), neighbors.end(), back_inserter(edibles), edible);
-	bool old_local = A.local;
 	if(!edibles.empty()) { // If there is an edible neighbor, always go there
 		++SV.local; SV.switches += (true - A.local); // Track movement states
 		A.local = true; 
+		A.dest = -1;
 		A.snake = *one_of(edibles);
+		//cout<<"door 1"<<endl;
 	} 
 	else if(A.rewards >= PAR.tol || A.snake == A.dest) { // If not, but the patch has been good, pick a random neighbor
 		++SV.local; SV.switches += (true - A.local); // Track movement states
-		A.local = true; 
+		A.local = true;
+		A.dest = -1;
 		A.snake = *one_of(neighbors);
+		//cout<<"door 2"<<endl;
 	}
 	else {
 		if(A.local) {
 			A.dest = best(A, H, PAR.E);
 			++SV.switches; // Track movement states
+			//cout<<"door 3"<<endl;
 		}
 		A.local = false;
 		A.snake = H.direction(A.snake, A.dest); // Otherwise take a step towards the best global location
@@ -178,19 +185,21 @@ void phen(landscape& L, lattice& H, parameters& PAR, state_var& SV, int day) {
 }
 
 void grow(landscape& L, binomial_distribution<>& ngaps, parameters& PAR, state_var& SV, int day) {
-	auto dead = [&](plant& p){return p.est < (day - PAR.jdays);};
+	auto dead = [&](plant& p){return p.est <= (day - PAR.jdays);};
 	int NGAPS = ngaps(urng());
 	assert( NGAPS >= 0 );
 	for(int i=0; i < NGAPS; ++i) { // How many gaps are created today?
 		auto& C = *one_of(L); // Refer to a random cell
 		auto rit = find_if(C.bank.rbegin(), C.bank.rend(), dead); // Find first dead seedling by searching from back to front
 		if(rit == C.bank.rbegin()) { // If seedling bank is empty (or has no live seeds), always grow a matrix tree
+			//cout<<"Door 1"<<endl;
 			SV.Nf -= C.tree.species; // Update focal tree count
 			C.tree = plant(SV.tree_id); // Replace old tree with new matrix tree
 			C.tree.fruit = maybe(PAR.f); // Give new tree fruit, with probability f
 			assert( C.tree.species == false );
 		}
 		else {
+			//cout<<"Door 2"<<endl;
 			auto winner = one_of_range(C.bank.rbegin(), rit); // Point to winner		
 			SV.Nf += (winner->species - C.tree.species); // Update focal tree count
 			C.tree = *winner; // Replace old tree with new one
@@ -218,43 +227,53 @@ void InitPopRand(lattice& H, population& P) {
 	}
 }
 
-/**void InitLandFile(lattice& H, landscape& L, std::string init, int& counter) {
+void loadLand(lattice& H, landscape& L, std::string filename, state_var& SV) {
 	for(int i=0; i!=H.N; ++i) { // Loop through cells
 		L[i].snake=i; // Cell ID = vector position
 		L[i].tree.fruit=true; // All trees start with fruit
 	}
-	ifstream landfile(init+"/land.state");
+	ifstream landfile(filename);
 	string line; vector<int> temp;	
 	while(getline(landfile, line)) {
 		istringstream iss(line);
 		for(int i; iss >> i; ) temp.push_back(i);
-		if(temp[0]>-1) {
+		if(temp[1] == -1) {
+			L[temp[0]].bank.emplace_back(plant(temp[2], temp[3], temp[4]));
+		}
+		else {
 			L[temp[0]].tree.id=temp[1]; 
 			L[temp[0]].tree.species=temp[2];
 			L[temp[0]].tree.parent=temp[3];
-		}
-		else {
-			L[temp[0]].bank.emplace_back(plant(temp[2], temp[3]));
+			L[temp[0]].tree.est=temp[4];
 		}
 		temp.clear();
 	}
 	landfile.close();
 	auto compfn = [&](cell i, cell j){return i.tree.id < j.tree.id;};
-	counter=max_element(L.begin(), L.end(), compfn)->tree.id;
-	counter++;
+	SV.tree_id = max_element(L.begin(), L.end(), compfn)->tree.id;
+	++SV.tree_id;
 }
 
-
-void InitPopFile(lattice& H, population& P, std::string init, int N) {
-	ifstream popfile(init+"/pop.state");
-	string line; vector<int> temp;	
+void loadPop(lattice& H, population& P, std::string filename) {
+	ifstream popfile(filename);
+	string line; vector<int> temp;
+	int agent_id = 0;
 	while(getline(popfile, line)) {
 		istringstream iss(line);
 		for(int i; iss >> i; ) temp.push_back(i);
-		P.back().snake = temp[0];
-		P.back().trees = temp[1];
-		for(int j=2; j!=2+H.N; ++j) P.back().longM.push_back(temp[j]); 		
+		P[agent_id].snake = temp[0];
+		P[agent_id].trees = temp[1];
+		for(int j=2; j!=2+H.N; ++j) P[agent_id].longM.push_back(temp[j]); 		
 		temp.clear();
+		++agent_id;
 	}
 	popfile.close();
-}**/
+}
+
+void inform(landscape& L, population& P, parameters& PAR) {
+	for(auto& A : P) {
+		for(auto& C : L) {
+			if(C.tree.species) A.longM[C.snake] = 1-PAR.a;
+		}
+	}
+}
