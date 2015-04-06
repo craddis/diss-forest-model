@@ -4,8 +4,8 @@
 //#include <fstream>
 
 template <typename pseudomap>
-void push_params(const pseudomap& vm, std::string rid) {
-	std::ofstream file ("params."+rid, std::ios::app);
+void push_params(const pseudomap& vm, parameters& PAR) {
+	std::ofstream file (PAR.resdir+"/params."+PAR.rid, std::ios::app);
 	for(auto& V : vm) {
 		if(typeid(int) == V.second.value().type()) file << V.first << "="  << boost::any_cast<int>(V.second.value()) << ";" << std::endl;
 		else if(typeid(double) == V.second.value().type()) {
@@ -13,6 +13,10 @@ void push_params(const pseudomap& vm, std::string rid) {
 		else if(typeid(std::string) == V.second.value().type()) {
 			file << V.first << "='"<< boost::any_cast<std::string>(V.second.value()) << "';" << std::endl;}
 	}
+	file << "jdays=" << PAR.jdays << ";" << endl;
+	file << "amort=" << PAR.amort << ";" << endl;
+	file << "days=" << PAR.days << ";" << endl;
+	file << "tol=" << PAR.tol << ";" << endl;
 	file.close();
 }
 
@@ -34,23 +38,43 @@ std::ostream& operator<<(std::ostream& os, const std::unordered_set<T>& v) {
     return os;
 }
 
-void push_state(landscape& L, population& P, parameters& PAR, std::string rid) {
-	auto older = [&](plant& p){return p.est < (PAR.days - PAR.jdays);};
-	std::ofstream landfile("land.state."+rid);
+void push_state(landscape& L, population& P, parameters& PAR) {
+	auto alive = [&](plant& p){return p.est > (PAR.days - PAR.jdays);};
+	std::ofstream landfile(PAR.resdir+"/land.state."+PAR.rid);
 	for(auto& C : L) {
 		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent <<" "<< C.tree.est << endl;
-		auto rit = find_if(C.bank.rbegin(), C.bank.rend(), older);
-		for(auto P = C.bank.rbegin(); P!=rit; ++P) {
+		for(auto P = find_if(C.bank.begin(), C.bank.end(), alive); P!=C.bank.end(); ++P) {
 			landfile << C.snake <<" "<< P->id <<" "<< P->species <<" "<< P->parent <<" "<< P->est << endl;
 		}
 	}
 	landfile.close();
-	std::ofstream popfile("pop.state."+rid);
+	std::ofstream popfile(PAR.resdir+"/pop.state."+PAR.rid);
 	for(auto& A : P) {
 		popfile << A.snake <<" "<< A.trees <<" "<< A.longM << A.shortM << endl;
 	}
 	popfile.close();
 }
+
+void push_land(landscape& L, parameters& PAR) {
+	auto alive = [&](plant& p){return p.est > (PAR.days - PAR.jdays);};
+	std::ofstream landfile(PAR.resdir+"/land.state."+PAR.rid);
+	for(auto& C : L) {
+		landfile << C.snake <<" "<< C.tree.id <<" "<< C.tree.species <<" "<< C.tree.parent <<" "<< C.tree.est << endl;
+		for(auto P = find_if(C.bank.begin(), C.bank.end(), alive); P!=C.bank.end(); ++P) {
+			landfile << C.snake <<" "<< P->id <<" "<< P->species <<" "<< P->parent <<" "<< P->est << endl;
+		}
+	}
+	landfile.close();
+}
+
+void push_pop(population& P, parameters& PAR) {
+	std::ofstream popfile(PAR.resdir+"/pop.state."+PAR.rid);
+	for(auto& A : P) {
+		popfile << A.snake <<" "<< A.trees <<" "<< A.longM << A.shortM << endl;
+	}
+	popfile.close();
+}
+
 
 /** DISPLAY FORMAT FOR TESTING
 void displayAgent(agent& A) {
